@@ -32,7 +32,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Export Kobweb site
-        run: ./gradlew :site:kobwebExport
+        run: bash ./gradlew :site:kobwebExport
 
       - name: Prepare Pages artifact
         shell: bash
