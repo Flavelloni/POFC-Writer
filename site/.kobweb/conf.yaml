@@ -1,0 +1,12 @@
+site:
+  title: "Pineapple OFC"
+server:
+  files:
+    dev:
+      contentRoot: "build/processedResources/js/main/public"
+      script: "build/kotlin-webpack/js/developmentExecutable/pofc.js"
+      api: "build/libs/pofc.jar"
+    prod:
+      script: "build/kotlin-webpack/js/productionExecutable/pofc.js"
+      siteRoot: ".kobweb/site"
+  port: 8080
