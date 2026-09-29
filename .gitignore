@@ -25,6 +25,7 @@ kotlin-js-store/
 site/.kobweb/server/
 site/.kobweb/site/
 site/build/
+tmp-pages-dist/
 
 ### Eclipse ###
 .apt_generated

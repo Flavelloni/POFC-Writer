@@ -18,6 +18,18 @@ Useful checks:
 .\gradlew.bat :site:kobwebExport
 ```
 
+## GitHub Pages
+
+The included GitHub Actions workflow exports the Kobweb app and deploys it to GitHub Pages on every push to `main`.
+
+After enabling GitHub Pages with **Source: GitHub Actions** in the repository settings, the app is served at:
+
+`https://flavelloni.github.io/POFC-Writer/`
+
+The royalties page is served at:
+
+`https://flavelloni.github.io/POFC-Writer/royalties.html`
+
 ## Project Layout
 
 - `site/.kobweb/conf.yaml` contains Kobweb server configuration.

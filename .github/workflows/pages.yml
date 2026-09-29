@@ -1,0 +1,64 @@
+name: Deploy Kobweb site to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Export Kobweb site
+        run: ./gradlew :site:kobwebExport
+
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf pages-dist
+          mkdir -p pages-dist
+          cp -R site/.kobweb/site/pages/. pages-dist/
+          cp site/.kobweb/site/system/pofc.js pages-dist/
+          cp site/.kobweb/site/system/pofc.js.map pages-dist/
+          touch pages-dist/.nojekyll
+          find pages-dist -name "*.html" -type f -print0 | xargs -0 sed -i 's|src="/pofc.js"|src="pofc.js"|g'
+          find pages-dist -name "*.html" -type f -print0 | xargs -0 sed -i 's|href="/favicon.ico"|href="favicon.ico"|g'
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

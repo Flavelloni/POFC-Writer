@@ -158,7 +158,7 @@ fun HomePage() {
             canShowScores = activeSession != null,
             onSessions = { screen = Screen.Sessions },
             onScores = { screen = Screen.Session },
-            onRoyalties = { window.location.href = "/royalties" }
+            onRoyalties = { window.location.href = appUrl("royalties.html") }
         )
     }
 }
@@ -937,6 +937,11 @@ private fun Store.replace(session: Session): Store =
     copy(sessions = sessions.map { if (it.id == session.id) session else it }, activeSessionId = session.id)
 
 private fun id(prefix: String): String = "$prefix-${Date.now().toLong()}-${Random.nextInt(1000, 9999)}"
+
+private fun appUrl(page: String): String {
+    val base = if (window.location.hostname.endsWith("github.io")) "/POFC-Writer/" else "/"
+    return base + page
+}
 
 private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.cardStyle() {
     style {

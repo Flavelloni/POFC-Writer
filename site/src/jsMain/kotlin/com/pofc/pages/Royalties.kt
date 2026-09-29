@@ -34,7 +34,7 @@ fun RoyaltiesPage() {
                 H1 { Text("Royalties") }
                 Text("Common Pineapple OFC bonuses used by the scorekeeper.")
                 Button(attrs = {
-                    onClick { window.location.href = "/" }
+                    onClick { window.location.href = appUrl("index.html") }
                     buttonStyle()
                 }) { Text("Back to scorekeeper") }
             }
@@ -131,4 +131,9 @@ private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.buttonStyle() {
         color(Color("#ffffff"))
         fontWeight("800")
     }
+}
+
+private fun appUrl(page: String): String {
+    val base = if (window.location.hostname.endsWith("github.io")) "/POFC-Writer/" else "/"
+    return base + page
 }
