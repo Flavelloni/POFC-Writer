@@ -409,14 +409,15 @@ private fun resolveAutomaticHands(players: List<Player>, entries: Map<Player, Pl
 
 private fun autoPriority(category: Category): Int = when (category) {
     Category.StraightFlush -> 0
-    Category.RoyalFlush -> 1
-    Category.Quads -> 2
-    Category.FullHouse -> 3
-    Category.Straight -> 4
-    Category.Trips -> 5
-    Category.Pair, Category.TwoPair -> 6
-    Category.High, Category.Flush -> 7
-    Category.Unknown -> 8
+    Category.Flush -> 1
+    Category.RoyalFlush -> 2
+    Category.Quads -> 3
+    Category.FullHouse -> 4
+    Category.Straight -> 5
+    Category.Trips -> 6
+    Category.Pair, Category.TwoPair -> 7
+    Category.High -> 8
+    Category.Unknown -> 9
 }
 
 private data class AutomaticHand(val ranks: List<Int>, val cards: List<String>)
@@ -538,10 +539,14 @@ private fun automaticHand(hand: ParsedHand, rankUsage: Map<Int, Int>, cardUsage:
         }
         Category.Flush -> {
             val ranks = if (specified.isEmpty()) {
-                highCardCandidates().firstOrNull { candidate -> candidate.all { available(it) > 0 } }.orEmpty()
+                highCardCandidates().firstOrNull { candidate ->
+                    candidate.all { available(it) > 0 } && suitedCardsForRanks(candidate) != null
+                }.orEmpty()
             } else {
                 highCardCandidates()
-                    .firstOrNull { candidate -> specified.all { it in candidate } && candidate.all { available(it) > 0 } }
+                    .firstOrNull { candidate ->
+                        specified.all { it in candidate } && candidate.all { available(it) > 0 } && suitedCardsForRanks(candidate) != null
+                    }
                     .orEmpty()
             }
             AutomaticHand(ranks, suitedCardsForRanks(ranks).orEmpty())
