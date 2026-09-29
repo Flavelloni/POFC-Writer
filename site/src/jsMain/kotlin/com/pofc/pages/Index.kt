@@ -15,6 +15,7 @@ import com.pofc.model.Store
 import com.pofc.model.Street
 import com.pofc.model.parseHand
 import com.pofc.model.rankName
+import com.pofc.model.resolvedHandsForDisplay
 import com.pofc.model.scoreRound
 import com.pofc.model.signed
 import com.pofc.model.totals
@@ -334,6 +335,7 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
     }
     var selectedHand by remember(roundId) { mutableStateOf<HandSelection?>(null) }
     val preview = scoreRound(session, hands.values.toList())
+    val displayHands = resolvedHandsForDisplay(session.players, hands.values.toList())
 
     Panel {
         Column(Modifier.gap(12.px)) {
@@ -369,9 +371,9 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
                 if (entry.busted) {
                     WarningBox("${player.name} is busted. No hand details are required for this round.")
                 } else {
-                    StreetCardRow(player.name, Street.Top, entry.top, 3, visualCards(entry.top, Street.Top, 3, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Top) }
-                    StreetCardRow(player.name, Street.Middle, entry.middle, 5, visualCards(entry.middle, Street.Middle, 5, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Middle) }
-                    StreetCardRow(player.name, Street.Bottom, entry.bottom, 5, visualCards(entry.bottom, Street.Bottom, 5, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Bottom) }
+                    StreetCardRow(player.name, Street.Top, entry.top, displayHands.getValue(player.id).getValue(Street.Top), 3, visualCards(displayHands.getValue(player.id).getValue(Street.Top), 3, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Top) }
+                    StreetCardRow(player.name, Street.Middle, entry.middle, displayHands.getValue(player.id).getValue(Street.Middle), 5, visualCards(displayHands.getValue(player.id).getValue(Street.Middle), 5, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Middle) }
+                    StreetCardRow(player.name, Street.Bottom, entry.bottom, displayHands.getValue(player.id).getValue(Street.Bottom), 5, visualCards(displayHands.getValue(player.id).getValue(Street.Bottom), 5, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Bottom) }
                 }
             }
         }
@@ -433,8 +435,7 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
 }
 
 @Composable
-private fun StreetCardRow(playerName: String, street: Street, value: String, cardCount: Int, cards: List<String>, onClick: () -> Unit) {
-    val parsed = parseHand(value, street)
+private fun StreetCardRow(playerName: String, street: Street, value: String, parsed: com.pofc.model.ParsedHand, cardCount: Int, cards: List<String>, onClick: () -> Unit) {
     Button(attrs = {
         onClick { onClick() }
         style {
@@ -516,26 +517,31 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
     var category by remember(street, current) { mutableStateOf(parsedCurrent.category.takeUnless { it == Category.Unknown }) }
     var firstRank by remember(street, current) { mutableStateOf(parsedCurrent.ranks.getOrNull(0)) }
     var secondRank by remember(street, current) { mutableStateOf(parsedCurrent.ranks.getOrNull(1)) }
-    val choices = listOf(
-        Category.High,
-        Category.Pair,
-        Category.TwoPair,
-        Category.Trips,
-        Category.Straight,
-        Category.Flush,
-        Category.FullHouse,
-        Category.Quads,
-        Category.StraightFlush,
-        Category.RoyalFlush
-    )
-    val needsSecond = category in listOf(Category.TwoPair, Category.FullHouse)
+    val choices = if (street == Street.Top) {
+        listOf(Category.High, Category.Pair, Category.Trips)
+    } else {
+        listOf(
+            Category.High,
+            Category.Pair,
+            Category.TwoPair,
+            Category.Trips,
+            Category.Straight,
+            Category.Flush,
+            Category.FullHouse,
+            Category.Quads,
+            Category.StraightFlush,
+            Category.RoyalFlush
+        )
+    }
+    val needsSecond = category in listOf(Category.TwoPair, Category.FullHouse) || (street == Street.Top && category == Category.Pair)
     val needsFirst = category != null && category != Category.RoyalFlush
     var thirdRank by remember(street, current) { mutableStateOf(parsedCurrent.ranks.getOrNull(2)) }
     var fourthRank by remember(street, current) { mutableStateOf(parsedCurrent.ranks.getOrNull(3)) }
     var fifthRank by remember(street, current) { mutableStateOf(parsedCurrent.ranks.getOrNull(4)) }
     val multiRankCategory = category in listOf(Category.Flush, Category.High)
+    val multiRankCount = if (street == Street.Top) 3 else 5
     val selectedRanks = if (multiRankCategory) {
-        listOfNotNull(firstRank, secondRank, thirdRank, fourthRank, fifthRank)
+        listOfNotNull(firstRank, secondRank, thirdRank, fourthRank, fifthRank).take(multiRankCount)
     } else {
         listOfNotNull(firstRank, secondRank)
     }
@@ -571,6 +577,7 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
                     choices.forEach { option ->
                         ToggleButton(option.label, category == option) {
                             category = option
+                            firstRank = null
                             secondRank = null
                             thirdRank = null
                             fourthRank = null
@@ -593,16 +600,16 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
                         RankWheel("1", firstRank) { firstRank = it }
                         RankWheel("2", secondRank) { secondRank = it }
                         RankWheel("3", thirdRank) { thirdRank = it }
-                        RankWheel("4", fourthRank) { fourthRank = it }
-                        RankWheel("5", fifthRank) { fifthRank = it }
+                        if (multiRankCount >= 4) RankWheel("4", fourthRank) { fourthRank = it }
+                        if (multiRankCount >= 5) RankWheel("5", fifthRank) { fifthRank = it }
                     }
                 } else if (needsFirst) {
-                    H3 { Text(if (category in listOf(Category.Straight, Category.StraightFlush)) "High card" else "Main rank") }
+                    H3 { Text(if (category in listOf(Category.Straight, Category.StraightFlush)) "Straight high" else if (category == Category.Pair) "Pair rank" else "Main rank") }
                     RankWheel("Rank", firstRank) { firstRank = it }
                 }
                 if (needsSecond) {
-                    H3 { Text(if (category == Category.FullHouse) "Pair rank" else "Second pair") }
-                    RankWheel("Rank", secondRank) { secondRank = it }
+                    H3 { Text(if (category == Category.FullHouse) "Pair rank" else if (category == Category.Pair) "Kicker" else "Second pair") }
+                    RankWheel(if (category == Category.Pair) "Kicker" else "Rank", secondRank) { secondRank = it }
                 }
                 GoodBox("Selected: ${if (value.isBlank()) "nothing yet" else parseHand(value, street).label}")
                 Row(Modifier.gap(8.px)) {
@@ -683,7 +690,11 @@ private fun handText(category: Category, ranks: List<Int>): String =
     when (category) {
         Category.Unknown -> ""
         Category.High -> if (ranks.isEmpty()) "high card" else "${ranks.joinToString(" ") { rankName(it) }} high"
-        Category.Pair -> ranks.getOrNull(0)?.let { "pair of ${rankName(it)}" } ?: "pair"
+        Category.Pair -> when (ranks.size) {
+            0 -> "pair"
+            1 -> "pair of ${rankName(ranks[0])}"
+            else -> "pair of ${rankName(ranks[0])} kicker ${rankName(ranks[1])}"
+        }
         Category.TwoPair -> when (ranks.size) {
             0 -> "two pair"
             1 -> "two pair ${rankName(ranks[0])}"
@@ -702,11 +713,14 @@ private fun handText(category: Category, ranks: List<Int>): String =
         Category.RoyalFlush -> "royal flush"
     }
 
-private fun visualCards(raw: String, street: Street, count: Int, playerIndex: Int, used: MutableSet<String>): List<String> {
-    val parsed = parseHand(raw, street)
+private fun visualCards(parsed: com.pofc.model.ParsedHand, count: Int, playerIndex: Int, used: MutableSet<String>): List<String> {
     if (parsed.category == Category.Unknown) return emptyList()
+    if (parsed.autoCards.isNotEmpty()) {
+        parsed.autoCards.forEach { used += it }
+        return parsed.autoCards.take(count)
+    }
     val preferredSuit = listOf('H', 'S', 'D').getOrElse(playerIndex) { 'C' }
-    val ranks = ranksForDisplay(parsed.category, parsed.ranks, count)
+    val ranks = ranksForDisplay(parsed.category, parsed.ranks, parsed.specifiedRankCount, count)
     val cards = mutableListOf<String>()
 
     when (parsed.category) {
@@ -715,59 +729,57 @@ private fun visualCards(raw: String, street: Street, count: Int, playerIndex: In
             ranks.forEach { rank -> cards += reserveCard(rank, listOf(suit, preferredSuit, 'H', 'S', 'D', 'C'), used) }
         }
         Category.Pair -> {
-            val rank = ranks.firstOrNull() ?: fallbackRank(playerIndex)
+            val rank = ranks.firstOrNull() ?: return emptyList()
             cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
             cards += reserveCard(rank, listOf('S', 'D', 'C', 'H'), used)
-            fillKickers(cards, count, preferredSuit, used, avoidRanks = setOf(rank))
+            ranks.getOrNull(1)?.let { kicker -> cards += reserveCard(kicker, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used) }
         }
         Category.TwoPair -> {
-            val pairRanks = ranks.take(2).ifEmpty { listOf(14, 13) }.let { if (it.size == 1) it + 13 else it }
+            val pairRanks = ranks.take(2)
             pairRanks.forEach { rank ->
                 cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
                 cards += reserveCard(rank, listOf('S', 'D', 'C', 'H'), used)
             }
-            fillKickers(cards, count, preferredSuit, used, avoidRanks = pairRanks.toSet())
         }
         Category.Trips -> {
-            val rank = ranks.firstOrNull() ?: fallbackRank(playerIndex)
+            val rank = ranks.firstOrNull() ?: return emptyList()
             cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
             cards += reserveCard(rank, listOf('S', 'D', 'C', 'H'), used)
             cards += reserveCard(rank, listOf('D', 'C', 'H', 'S'), used)
-            fillKickers(cards, count, preferredSuit, used, avoidRanks = setOf(rank))
         }
         Category.FullHouse -> {
-            val trip = ranks.getOrNull(0) ?: fallbackRank(playerIndex)
-            val pair = ranks.getOrNull(1) ?: if (trip == 14) 13 else 14
+            val trip = ranks.getOrNull(0) ?: return emptyList()
             cards += reserveCard(trip, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
             cards += reserveCard(trip, listOf('S', 'D', 'C', 'H'), used)
             cards += reserveCard(trip, listOf('D', 'C', 'H', 'S'), used)
-            cards += reserveCard(pair, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
-            cards += reserveCard(pair, listOf('S', 'D', 'C', 'H'), used)
+            ranks.getOrNull(1)?.let { pair ->
+                cards += reserveCard(pair, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
+                cards += reserveCard(pair, listOf('S', 'D', 'C', 'H'), used)
+            }
         }
         Category.Quads -> {
-            val rank = ranks.firstOrNull() ?: fallbackRank(playerIndex)
+            val rank = ranks.firstOrNull() ?: return emptyList()
             listOf(preferredSuit, 'H', 'S', 'D', 'C').distinct().take(4).forEach { suit ->
                 cards += reserveCard(rank, listOf(suit, 'H', 'S', 'D', 'C'), used)
             }
-            fillKickers(cards, count, preferredSuit, used, avoidRanks = setOf(rank))
         }
-        Category.Straight -> ranks.forEach { rank ->
-            cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
+        Category.Straight -> ranks.forEachIndexed { index, rank ->
+            val suit = listOf('H', 'S', 'D', 'C', 'H').getOrElse(index) { preferredSuit }
+            cards += reserveCard(rank, listOf(suit, preferredSuit, 'H', 'S', 'D', 'C'), used)
         }
         Category.High, Category.Unknown -> {
             ranks.forEach { rank -> cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used) }
-            fillKickers(cards, count, preferredSuit, used, avoidRanks = ranks.toSet())
         }
     }
 
     return cards.take(count)
 }
 
-private fun ranksForDisplay(category: Category, selected: List<Int>, count: Int): List<Int> =
+private fun ranksForDisplay(category: Category, selected: List<Int>, specifiedRankCount: Int, count: Int): List<Int> =
     when (category) {
         Category.RoyalFlush -> listOf(14, 13, 12, 11, 10)
         Category.StraightFlush, Category.Straight -> straightRanks(selected.firstOrNull() ?: 14)
-        Category.Flush, Category.High -> (selected + listOf(14, 12, 9, 7, 4, 2).filterNot { it in selected }).take(count)
+        Category.Flush, Category.High -> selected.take(if (specifiedRankCount == 0) count else specifiedRankCount)
         else -> selected
     }
 
