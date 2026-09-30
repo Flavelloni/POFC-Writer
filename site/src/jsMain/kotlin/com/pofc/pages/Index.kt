@@ -682,8 +682,9 @@ private fun OptionGrid(content: @Composable () -> Unit) {
     Div(attrs = {
         style {
             display(DisplayStyle.Grid)
-            property("grid-template-columns", "repeat(auto-fit, minmax(132px, 1fr))")
+            property("grid-template-columns", "repeat(2, minmax(0, 1fr))")
             gap(8.px)
+            width(100.percent)
         }
     }) {
         content()
@@ -1032,6 +1033,7 @@ private fun appUrl(page: String): String {
 
 private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.cardStyle() {
     style {
+        width(100.percent)
         padding(14.px)
         property("padding", "clamp(9px, 2.6vw, 14px)")
         border(1.px, LineStyle.Solid, Color("#d8ded7"))
