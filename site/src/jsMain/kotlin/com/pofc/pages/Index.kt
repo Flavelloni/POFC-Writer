@@ -76,6 +76,23 @@ fun HomePage() {
         window.localStorage.setItem(StoreKey, json.encodeToString(next))
     }
 
+    fun clearPageData() {
+        clearLocalPageData()
+        store = Store()
+        editingRoundId = null
+        screen = Screen.Sessions
+    }
+
+    fun deleteSession(sessionId: String) {
+        val sessions = store.sessions.filterNot { it.id == sessionId }
+        val activeSessionId = store.activeSessionId.takeUnless { it == sessionId }
+        save(store.copy(sessions = sessions, activeSessionId = activeSessionId))
+        if (activeSessionId == null) {
+            editingRoundId = null
+            screen = Screen.Sessions
+        }
+    }
+
     val activeSession = store.sessions.firstOrNull { it.id == store.activeSessionId }
 
     Column(Modifier.fillMaxWidth().minHeight(100.percent).gap(16.px)) {
@@ -90,6 +107,7 @@ fun HomePage() {
                 maxWidth(1040.px)
                 property("margin", "0 auto")
                 padding(16.px)
+                property("padding", "clamp(8px, 2.8vw, 16px)")
                 property("box-sizing", "border-box")
             }
         }) {
@@ -101,7 +119,17 @@ fun HomePage() {
                         save(store.copy(activeSessionId = id))
                         screen = Screen.Session
                     },
-                    onNew = { screen = Screen.NewSession }
+                    onNew = { screen = Screen.NewSession },
+                    onDeleteSession = { id ->
+                        if (window.confirm("Delete this session from this device?")) {
+                            deleteSession(id)
+                        }
+                    },
+                    onClearData = {
+                        if (window.confirm("Delete all Pineapple OFC data saved by this page on this device?")) {
+                            clearPageData()
+                        }
+                    }
                 )
                 Screen.NewSession -> NewSessionScreen(
                     onCreate = { session ->
@@ -112,7 +140,13 @@ fun HomePage() {
                 )
                 Screen.Session -> {
                     if (activeSession == null) {
-                        SessionsScreen(store, onOpen = {}, onNew = { screen = Screen.NewSession })
+                        SessionsScreen(
+                            store,
+                            onOpen = {},
+                            onNew = { screen = Screen.NewSession },
+                            onDeleteSession = { deleteSession(it) },
+                            onClearData = { clearPageData() }
+                        )
                     } else {
                         SessionScreen(
                             session = activeSession,
@@ -133,6 +167,11 @@ fun HomePage() {
                                     updatedAt = Date.now()
                                 )
                                 save(store.replace(updated))
+                            },
+                            onDeleteSession = {
+                                if (window.confirm("Delete ${activeSession.name} from this device?")) {
+                                    deleteSession(activeSession.id)
+                                }
                             }
                         )
                     }
@@ -210,12 +249,21 @@ private fun TopBar(subtitle: String, onSessions: () -> Unit, onNew: () -> Unit) 
 }
 
 @Composable
-private fun SessionsScreen(store: Store, onOpen: (String) -> Unit, onNew: () -> Unit) {
+private fun SessionsScreen(
+    store: Store,
+    onOpen: (String) -> Unit,
+    onNew: () -> Unit,
+    onDeleteSession: (String) -> Unit,
+    onClearData: () -> Unit
+) {
     Panel {
         Column(Modifier.gap(12.px)) {
             H2 { Text("Sessions") }
             Muted("Start a table or resume an old one. Refreshing or closing the browser keeps this data on this device.")
-            PrimaryButton("Start new session", onNew)
+            Row(Modifier.gap(8.px)) {
+                PrimaryButton("Start new session", onNew)
+                DangerButton("Clear device data", onClearData)
+            }
         }
     }
     if (store.sessions.isEmpty()) {
@@ -228,7 +276,10 @@ private fun SessionsScreen(store: Store, onOpen: (String) -> Unit, onNew: () -> 
                     H3 { Text(session.name) }
                     Muted("${session.rounds.size} rounds | ${if (session.mode == ScoreMode.Obk) "OBK" else "Standard"} rules")
                     ScoreGrid(session, scores, fantasies, latest = session.rounds.lastOrNull())
-                    AppButton("Open", onClick = { onOpen(session.id) })
+                    Row(Modifier.gap(8.px)) {
+                        AppButton("Open", onClick = { onOpen(session.id) })
+                        DangerButton("Delete", onClick = { onDeleteSession(session.id) })
+                    }
                 }
             }
         }
@@ -283,7 +334,8 @@ private fun SessionScreen(
     onModeChange: (ScoreMode) -> Unit,
     onAddRound: () -> Unit,
     onEditRound: (String) -> Unit,
-    onDeleteRound: (String) -> Unit
+    onDeleteRound: (String) -> Unit,
+    onDeleteSession: () -> Unit
 ) {
     val (scores, fantasies) = totals(session)
     Panel {
@@ -294,6 +346,7 @@ private fun SessionScreen(
                     Muted(if (session.mode == ScoreMode.Obk) "OBK: a 2:1 street win is worth 2 base points." else "Standard: a 2:1 street win is worth 1 base point.")
                 }
                 PrimaryButton("Add round", onAddRound)
+                DangerButton("Delete session", onDeleteSession)
             }
             Row(Modifier.gap(8.px)) {
                 ToggleButton("Standard", session.mode == ScoreMode.Standard) { onModeChange(ScoreMode.Standard) }
@@ -440,15 +493,17 @@ private fun StreetCardRow(playerName: String, street: Street, value: String, par
         onClick { onClick() }
         style {
             width(100.percent)
-            padding(12.px)
+            padding(10.px)
+            property("padding", "clamp(8px, 2.4vw, 12px)")
             border(1.px, LineStyle.Solid, Color("#d8ded7"))
             borderRadius(8.px)
             backgroundColor(Color("#ffffff"))
             property("text-align", "left")
             property("cursor", "pointer")
+            property("box-sizing", "border-box")
         }
     }) {
-        Column(Modifier.gap(8.px)) {
+        Column(Modifier.gap(6.px)) {
             H3(attrs = { style { margin(0.px); fontSize(16.px) } }) {
                 Text("${street.label}: ${if (value.isBlank()) "Tap to choose" else parsed.label}")
             }
@@ -461,14 +516,14 @@ private fun StreetCardRow(playerName: String, street: Street, value: String, par
 
 @Composable
 private fun CardPlaceholders(count: Int, cards: List<String>) {
-    Row(Modifier.gap(5.px)) {
+    Row(Modifier.gap(4.px)) {
         repeat(count) { index ->
             val card = cards.getOrNull(index)
             if (card == null) {
                 Div(attrs = {
                     style {
-                        width(34.px)
-                        height(48.px)
+                        width(30.px)
+                        height(42.px)
                         border(1.px, LineStyle.Solid, Color("#bfc9c2"))
                         borderRadius(6.px)
                         backgroundColor(Color("#f8faf9"))
@@ -493,8 +548,8 @@ private fun MiniPlayingCard(code: String) {
     val red = suit == 'H' || suit == 'D'
     Div(attrs = {
         style {
-            width(34.px)
-            height(48.px)
+            width(30.px)
+            height(42.px)
             border(1.px, LineStyle.Solid, Color("#bfc9c2"))
             borderRadius(6.px)
             backgroundColor(Color("#ffffff"))
@@ -505,8 +560,8 @@ private fun MiniPlayingCard(code: String) {
         }
     }) {
         Div(attrs = { style { property("text-align", "center"); lineHeight("1") } }) {
-            Div(attrs = { style { fontSize(12.px); fontWeight("900") } }) { Text(rank) }
-            Div(attrs = { style { fontSize(16.px) } }) { Text(symbol) }
+            Div(attrs = { style { fontSize(11.px); fontWeight("900") } }) { Text(rank) }
+            Div(attrs = { style { fontSize(14.px) } }) { Text(symbol) }
         }
     }
 }
@@ -554,6 +609,7 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
             backgroundColor(Color("rgba(31, 37, 34, 0.42)"))
             property("z-index", "40")
             padding(14.px)
+            property("padding", "clamp(6px, 2vw, 14px)")
             property("box-sizing", "border-box")
             display(DisplayStyle.Grid)
             property("place-items", "center")
@@ -563,16 +619,17 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
             style {
                 width(100.percent)
                 maxWidth(720.px)
-                maxHeight(92.vh)
+                maxHeight(94.vh)
                 property("overflow", "auto")
-                padding(14.px)
+                padding(12.px)
+                property("padding", "clamp(8px, 2.4vw, 14px)")
                 borderRadius(8.px)
                 backgroundColor(Color("#ffffff"))
+                property("box-sizing", "border-box")
             }
         }) {
-            Column(Modifier.gap(14.px)) {
+            Column(Modifier.gap(10.px)) {
                 H2(attrs = { style { margin(0.px) } }) { Text("$playerName ${street.label}") }
-                Muted("Choose with taps only. Add rank detail when it matters.")
                 OptionGrid {
                     choices.forEach { option ->
                         ToggleButton(option.label, category == option) {
@@ -589,27 +646,23 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
                     }
                 }
                 if (multiRankCategory) {
-                    H3 { Text(if (category == Category.Flush) "Flush cards" else "High cards") }
-                    Div(attrs = {
-                        style {
-                            display(DisplayStyle.Grid)
-                            property("grid-template-columns", "repeat(auto-fit, minmax(108px, 1fr))")
-                            gap(8.px)
-                        }
-                    }) {
+                    H3(attrs = { style { margin(0.px) } }) { Text(if (category == Category.Flush) "Flush cards" else "High cards") }
+                    RankWheelGrid {
                         RankWheel("1", firstRank) { firstRank = it }
                         RankWheel("2", secondRank) { secondRank = it }
                         RankWheel("3", thirdRank) { thirdRank = it }
                         if (multiRankCount >= 4) RankWheel("4", fourthRank) { fourthRank = it }
                         if (multiRankCount >= 5) RankWheel("5", fifthRank) { fifthRank = it }
                     }
-                } else if (needsFirst) {
-                    H3 { Text(if (category in listOf(Category.Straight, Category.StraightFlush)) "Straight high" else if (category == Category.Pair) "Pair rank" else "Main rank") }
-                    RankWheel("Rank", firstRank) { firstRank = it }
-                }
-                if (needsSecond) {
-                    H3 { Text(if (category == Category.FullHouse) "Pair rank" else if (category == Category.Pair) "Kicker" else "Second pair") }
-                    RankWheel(if (category == Category.Pair) "Kicker" else "Rank", secondRank) { secondRank = it }
+                } else if (needsFirst || needsSecond) {
+                    RankWheelGrid {
+                        if (needsFirst) {
+                            RankWheel(if (category in listOf(Category.Straight, Category.StraightFlush)) "High" else if (category == Category.Pair) "Pair" else "Rank", firstRank) { firstRank = it }
+                        }
+                        if (needsSecond) {
+                            RankWheel(if (category == Category.FullHouse) "Pair" else if (category == Category.Pair) "Kicker" else "2nd pair", secondRank) { secondRank = it }
+                        }
+                    }
                 }
                 GoodBox("Selected: ${if (value.isBlank()) "nothing yet" else parseHand(value, street).label}")
                 Row(Modifier.gap(8.px)) {
@@ -638,6 +691,20 @@ private fun OptionGrid(content: @Composable () -> Unit) {
 }
 
 @Composable
+private fun RankWheelGrid(content: @Composable () -> Unit) {
+    Div(attrs = {
+        style {
+            display(DisplayStyle.Grid)
+            property("grid-template-columns", "repeat(2, minmax(0, 1fr))")
+            gap(8.px)
+            width(100.percent)
+        }
+    }) {
+        content()
+    }
+}
+
+@Composable
 private fun RankGrid(selected: Int?, onSelect: (Int) -> Unit) {
     OptionGrid {
         (14 downTo 2).forEach { rank ->
@@ -648,11 +715,11 @@ private fun RankGrid(selected: Int?, onSelect: (Int) -> Unit) {
 
 @Composable
 private fun RankWheel(label: String, selected: Int?, onSelect: (Int?) -> Unit) {
-    Column(Modifier.gap(6.px)) {
+    Column(Modifier.gap(4.px)) {
         Muted(label)
         Div(attrs = {
             style {
-                maxHeight(138.px)
+                maxHeight(116.px)
                 property("overflow-y", "auto")
                 property("scroll-snap-type", "y mandatory")
                 border(1.px, LineStyle.Solid, Color("#d8ded7"))
@@ -674,7 +741,7 @@ private fun WheelItem(text: String, active: Boolean, onClick: () -> Unit) {
         onClick { onClick() }
         style {
             width(100.percent)
-            minHeight(42.px)
+            minHeight(34.px)
             border(0.px)
             borderRadius(0.px)
             backgroundColor(if (active) Color("#147d64") else Color("transparent"))
@@ -945,6 +1012,14 @@ private fun loadStore(): Store =
         Store()
     }
 
+private fun clearLocalPageData() {
+    val storage = window.localStorage
+    val keys = (0 until storage.length)
+        .mapNotNull { storage.key(it) }
+        .filter { it == StoreKey || it.startsWith("pofc.") }
+    keys.forEach { storage.removeItem(it) }
+}
+
 private fun Store.replace(session: Session): Store =
     copy(sessions = sessions.map { if (it.id == session.id) session else it }, activeSessionId = session.id)
 
@@ -958,10 +1033,12 @@ private fun appUrl(page: String): String {
 private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.cardStyle() {
     style {
         padding(14.px)
+        property("padding", "clamp(9px, 2.6vw, 14px)")
         border(1.px, LineStyle.Solid, Color("#d8ded7"))
         borderRadius(8.px)
         backgroundColor(Color("#ffffff"))
         property("box-shadow", "0 10px 30px rgba(28, 42, 36, 0.12)")
+        property("box-sizing", "border-box")
     }
 }
 
