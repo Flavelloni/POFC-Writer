@@ -15,7 +15,6 @@ import com.pofc.model.Store
 import com.pofc.model.Street
 import com.pofc.model.parseHand
 import com.pofc.model.rankName
-import com.pofc.model.resolvedHandsForDisplay
 import com.pofc.model.scoreRound
 import com.pofc.model.signed
 import com.pofc.model.totals
@@ -31,9 +30,13 @@ import com.varabyte.kobweb.compose.ui.modifiers.minHeight
 import com.varabyte.kobweb.compose.ui.modifiers.padding
 import com.varabyte.kobweb.compose.ui.modifiers.width
 import com.varabyte.kobweb.core.Page
+import com.varabyte.kobweb.silk.components.icons.MoonIcon
+import com.varabyte.kobweb.silk.components.icons.SunIcon
+import com.varabyte.kobweb.silk.theme.colors.ColorMode
 import kotlinx.browser.window
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.jetbrains.compose.web.attributes.disabled
 import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.attributes.value
@@ -198,7 +201,7 @@ fun HomePage() {
             canShowScores = activeSession != null,
             onSessions = { screen = Screen.Sessions },
             onScores = { screen = Screen.Session },
-            onRoyalties = { window.location.href = appUrl("royalties.html") }
+            onRoyalties = { window.location.href = appUrl("royalties") }
         )
     }
 }
@@ -208,8 +211,8 @@ private fun TopBar(subtitle: String, onSessions: () -> Unit, onNew: () -> Unit) 
     Div(attrs = {
         style {
             width(100.percent)
-            property("border-bottom", "1px solid #d8ded7")
-            backgroundColor(Color("#f6f3eb"))
+            property("border-bottom", "1px solid ${borderColor()}")
+            backgroundColor(Color(surfaceColor()))
         }
     }) {
     Div(attrs = {
@@ -226,8 +229,8 @@ private fun TopBar(subtitle: String, onSessions: () -> Unit, onNew: () -> Unit) 
                 width(42.px)
                 minHeight(42.px)
                 borderRadius(8.px)
-                backgroundColor(Color("#147d64"))
-                color(Color("#ffffff"))
+                backgroundColor(Color(textColor()))
+                color(Color(surfaceColor()))
                 display(DisplayStyle.Grid)
                 property("place-items", "center")
                 fontWeight("900")
@@ -242,9 +245,23 @@ private fun TopBar(subtitle: String, onSessions: () -> Unit, onNew: () -> Unit) 
         Row(Modifier.gap(8.px).margin(left = 0.px)) {
             AppButton("Sessions", onSessions)
             PrimaryButton("New", onNew)
+            ColorModeButton()
         }
     }
     }
+    }
+}
+
+@Composable
+private fun ColorModeButton() {
+    var colorMode by ColorMode.currentState
+    Button(attrs = {
+        onClick { colorMode = colorMode.opposite }
+        iconButtonStyle()
+        attr("aria-label", "Toggle color mode")
+        attr("title", "Toggle color mode")
+    }) {
+        if (colorMode.isLight) MoonIcon() else SunIcon()
     }
 }
 
@@ -276,7 +293,7 @@ private fun SessionsScreen(
                     H3 { Text(session.name) }
                     Muted("${session.rounds.size} rounds | ${if (session.mode == ScoreMode.Obk) "OBK" else "Standard"} rules")
                     ScoreGrid(session, scores, fantasies, latest = session.rounds.lastOrNull())
-                    Row(Modifier.gap(8.px)) {
+                    ButtonRowEnd {
                         AppButton("Open", onClick = { onOpen(session.id) })
                         DangerButton("Delete", onClick = { onDeleteSession(session.id) })
                     }
@@ -288,7 +305,7 @@ private fun SessionsScreen(
 
 @Composable
 private fun NewSessionScreen(onCreate: (Session) -> Unit, onCancel: () -> Unit) {
-    var sessionName by remember { mutableStateOf("Pineapple OFC ${Date().toLocaleDateString()}") }
+    var sessionName by remember { mutableStateOf("Session from ${Date().toLocaleDateString()}") }
     var playerOne by remember { mutableStateOf("") }
     var playerTwo by remember { mutableStateOf("") }
     var playerThree by remember { mutableStateOf("") }
@@ -388,22 +405,8 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
     }
     var selectedHand by remember(roundId) { mutableStateOf<HandSelection?>(null) }
     val preview = scoreRound(session, hands.values.toList())
-    val displayHands = resolvedHandsForDisplay(session.players, hands.values.toList())
 
-    Panel {
-        Column(Modifier.gap(12.px)) {
-            H2 { Text(if (existing == null) "New round" else "Edit round") }
-            Muted("Tap a street, then choose the hand type and details. No typing is needed.")
-            if (preview.issues.isNotEmpty()) {
-                WarningBox(preview.issues.joinToString(" | "))
-            } else {
-                GoodBox("Ready to save. All pairwise payouts can be calculated.")
-            }
-        }
-    }
-
-    val displayedCards = mutableSetOf<String>()
-    session.players.forEachIndexed { playerIndex, player ->
+    session.players.forEach { player ->
         val entry = hands.getValue(player.id)
         Panel {
             Column(Modifier.gap(12.px)) {
@@ -424,9 +427,9 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
                 if (entry.busted) {
                     WarningBox("${player.name} is busted. No hand details are required for this round.")
                 } else {
-                    StreetCardRow(player.name, Street.Top, entry.top, displayHands.getValue(player.id).getValue(Street.Top), 3, visualCards(displayHands.getValue(player.id).getValue(Street.Top), 3, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Top) }
-                    StreetCardRow(player.name, Street.Middle, entry.middle, displayHands.getValue(player.id).getValue(Street.Middle), 5, visualCards(displayHands.getValue(player.id).getValue(Street.Middle), 5, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Middle) }
-                    StreetCardRow(player.name, Street.Bottom, entry.bottom, displayHands.getValue(player.id).getValue(Street.Bottom), 5, visualCards(displayHands.getValue(player.id).getValue(Street.Bottom), 5, playerIndex, displayedCards)) { selectedHand = HandSelection(player.id, Street.Bottom) }
+                    HandButton(Street.Top, entry.top) { selectedHand = HandSelection(player.id, Street.Top) }
+                    HandButton(Street.Middle, entry.middle) { selectedHand = HandSelection(player.id, Street.Middle) }
+                    HandButton(Street.Bottom, entry.bottom) { selectedHand = HandSelection(player.id, Street.Bottom) }
                 }
             }
         }
@@ -459,6 +462,7 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
 
     Panel {
         Column(Modifier.gap(12.px)) {
+            H2 { Text(if (existing == null) "New round" else "Edit round") }
             H3 { Text("Preview") }
             DeltaRow(session, preview.deltas)
             preview.pairings.forEach { pairing ->
@@ -466,9 +470,12 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
                 val right = session.players.first { it.id == pairing.rightPlayerId }
                 Muted("${left.name} vs ${right.name}: ${pairing.leftDelta.signed()} / ${pairing.rightDelta.signed()}")
             }
+            if (preview.issues.isNotEmpty()) {
+                WarningBox(preview.issues.joinToString(" | "))
+            }
             Row(Modifier.gap(8.px)) {
-                PrimaryButton("Save round") {
-                    if (preview.issues.isEmpty()) {
+                if (preview.issues.isEmpty()) {
+                    PrimaryButton("Save round") {
                         onSave(
                             Round(
                                 id = existing?.id ?: id("round"),
@@ -480,6 +487,8 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
                             )
                         )
                     }
+                } else {
+                    DisabledButton("Resolve issues to save")
                 }
                 AppButton("Cancel", onCancel)
             }
@@ -488,29 +497,26 @@ private fun RoundScreen(session: Session, roundId: String?, onSave: (Round) -> U
 }
 
 @Composable
-private fun StreetCardRow(playerName: String, street: Street, value: String, parsed: com.pofc.model.ParsedHand, cardCount: Int, cards: List<String>, onClick: () -> Unit) {
+private fun HandButton(street: Street, value: String, onClick: () -> Unit) {
+    val parsed = parseHand(value, street)
     Button(attrs = {
         onClick { onClick() }
         style {
             width(100.percent)
-            padding(10.px)
-            property("padding", "clamp(8px, 2.4vw, 12px)")
-            border(1.px, LineStyle.Solid, Color("#d8ded7"))
+            minHeight(48.px)
+            padding(0.px, 12.px)
+            border(1.px, LineStyle.Solid, Color(borderColor()))
             borderRadius(8.px)
-            backgroundColor(Color("#ffffff"))
+            backgroundColor(Color(surfaceColor()))
+            color(Color(textColor()))
             property("text-align", "left")
             property("cursor", "pointer")
             property("box-sizing", "border-box")
+            fontSize(16.px)
+            fontWeight("800")
         }
     }) {
-        Column(Modifier.gap(6.px)) {
-            H3(attrs = { style { margin(0.px); fontSize(16.px) } }) {
-                Text("${street.label}: ${if (value.isBlank()) "Tap to choose" else parsed.label}")
-            }
-            CardPlaceholders(cardCount, cards)
-            Muted("${parsed.label} | royalty ${parsed.royalty}${if (parsed.fantasyEligible) " | fantasy eligible" else ""}")
-            Muted("$playerName ${street.label}")
-        }
+        Text("${street.label}: ${if (value.isBlank()) "?" else parsed.label}")
     }
 }
 
@@ -524,12 +530,12 @@ private fun CardPlaceholders(count: Int, cards: List<String>) {
                     style {
                         width(30.px)
                         height(42.px)
-                        border(1.px, LineStyle.Solid, Color("#bfc9c2"))
+                        border(1.px, LineStyle.Solid, Color(borderColor()))
                         borderRadius(6.px)
-                        backgroundColor(Color("#f8faf9"))
+                        backgroundColor(Color(mutedSurfaceColor()))
                         display(DisplayStyle.Grid)
                         property("place-items", "center")
-                        color(Color("#7b8781"))
+                        color(Color(mutedTextColor()))
                         fontWeight("800")
                     }
                 }) { Text("+") }
@@ -550,10 +556,10 @@ private fun MiniPlayingCard(code: String) {
         style {
             width(30.px)
             height(42.px)
-            border(1.px, LineStyle.Solid, Color("#bfc9c2"))
+            border(1.px, LineStyle.Solid, Color(borderColor()))
             borderRadius(6.px)
-            backgroundColor(Color("#ffffff"))
-            color(if (red) Color("#b3263b") else Color("#1f2522"))
+            backgroundColor(Color(surfaceColor()))
+            color(if (red) Color(dangerColor()) else Color(textColor()))
             display(DisplayStyle.Grid)
             property("place-items", "center")
             property("box-shadow", "0 2px 6px rgba(31, 37, 34, 0.12)")
@@ -572,6 +578,7 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
     var category by remember(street, current) { mutableStateOf(parsedCurrent.category.takeUnless { it == Category.Unknown }) }
     var firstRank by remember(street, current) { mutableStateOf(parsedCurrent.ranks.getOrNull(0)) }
     var secondRank by remember(street, current) { mutableStateOf(parsedCurrent.ranks.getOrNull(1)) }
+    var changingCategory by remember(street, current) { mutableStateOf(category == null) }
     val choices = if (street == Street.Top) {
         listOf(Category.High, Category.Pair, Category.Trips)
     } else {
@@ -624,44 +631,54 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
                 padding(12.px)
                 property("padding", "clamp(8px, 2.4vw, 14px)")
                 borderRadius(8.px)
-                backgroundColor(Color("#ffffff"))
+                backgroundColor(Color(surfaceColor()))
+                color(Color(textColor()))
                 property("box-sizing", "border-box")
             }
         }) {
             Column(Modifier.gap(10.px)) {
                 H2(attrs = { style { margin(0.px) } }) { Text("$playerName ${street.label}") }
-                OptionGrid {
-                    choices.forEach { option ->
-                        ToggleButton(option.label, category == option) {
-                            category = option
-                            firstRank = null
-                            secondRank = null
-                            thirdRank = null
-                            fourthRank = null
-                            fifthRank = null
-                            if (option == Category.RoyalFlush) {
-                                firstRank = 14
+                if (category == null || changingCategory) {
+                    OptionGrid {
+                        choices.forEach { option ->
+                            ToggleButton(option.label, category == option) {
+                                category = option
+                                changingCategory = false
+                                firstRank = null
+                                secondRank = null
+                                thirdRank = null
+                                fourthRank = null
+                                fifthRank = null
+                                if (option == Category.RoyalFlush) {
+                                    firstRank = 14
+                                }
                             }
                         }
                     }
+                } else {
+                    Row(Modifier.gap(8.px), verticalAlignment = Alignment.CenterVertically) {
+                        ToggleButton(category?.label.orEmpty(), true) {}
+                        AppButton("Change hand type") { changingCategory = true }
+                    }
                 }
                 if (multiRankCategory) {
-                    H3(attrs = { style { margin(0.px) } }) { Text(if (category == Category.Flush) "Flush cards" else "High cards") }
-                    RankWheelGrid {
-                        RankWheel("1", firstRank) { firstRank = it }
-                        RankWheel("2", secondRank) { secondRank = it }
-                        RankWheel("3", thirdRank) { thirdRank = it }
-                        if (multiRankCount >= 4) RankWheel("4", fourthRank) { fourthRank = it }
-                        if (multiRankCount >= 5) RankWheel("5", fifthRank) { fifthRank = it }
+                    MultiRankButtons(
+                        label = if (category == Category.Flush) "Flush cards" else "High cards",
+                        selected = selectedRanks,
+                        max = multiRankCount
+                    ) { next ->
+                        firstRank = next.getOrNull(0)
+                        secondRank = next.getOrNull(1)
+                        thirdRank = next.getOrNull(2)
+                        fourthRank = next.getOrNull(3)
+                        fifthRank = next.getOrNull(4)
                     }
                 } else if (needsFirst || needsSecond) {
-                    RankWheelGrid {
-                        if (needsFirst) {
-                            RankWheel(if (category in listOf(Category.Straight, Category.StraightFlush)) "High" else if (category == Category.Pair) "Pair" else "Rank", firstRank) { firstRank = it }
-                        }
-                        if (needsSecond) {
-                            RankWheel(if (category == Category.FullHouse) "Pair" else if (category == Category.Pair) "Kicker" else "2nd pair", secondRank) { secondRank = it }
-                        }
+                    if (needsFirst) {
+                        RankButtonSection(if (category in listOf(Category.Straight, Category.StraightFlush)) "High" else if (category == Category.Pair) "Pair" else "Rank", firstRank) { firstRank = it }
+                    }
+                    if (needsSecond) {
+                        RankButtonSection(if (category == Category.FullHouse) "Pair" else if (category == Category.Pair) "Kicker" else "2nd pair", secondRank) { secondRank = it }
                     }
                 }
                 GoodBox("Selected: ${if (value.isBlank()) "nothing yet" else parseHand(value, street).label}")
@@ -681,8 +698,8 @@ private fun HandPicker(playerName: String, street: Street, current: String, onAp
 private fun OptionGrid(content: @Composable () -> Unit) {
     Div(attrs = {
         style {
-            display(DisplayStyle.Grid)
-            property("grid-template-columns", "repeat(2, minmax(0, 1fr))")
+            display(DisplayStyle.Flex)
+            property("flex-wrap", "wrap")
             gap(8.px)
             width(100.percent)
         }
@@ -692,66 +709,37 @@ private fun OptionGrid(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun RankWheelGrid(content: @Composable () -> Unit) {
-    Div(attrs = {
-        style {
-            display(DisplayStyle.Grid)
-            property("grid-template-columns", "repeat(2, minmax(0, 1fr))")
-            gap(8.px)
-            width(100.percent)
-        }
-    }) {
-        content()
-    }
-}
-
-@Composable
-private fun RankGrid(selected: Int?, onSelect: (Int) -> Unit) {
-    OptionGrid {
-        (14 downTo 2).forEach { rank ->
-            ToggleButton(rankName(rank), selected == rank) { onSelect(rank) }
-        }
-    }
-}
-
-@Composable
-private fun RankWheel(label: String, selected: Int?, onSelect: (Int?) -> Unit) {
-    Column(Modifier.gap(4.px)) {
-        Muted(label)
-        Div(attrs = {
-            style {
-                maxHeight(116.px)
-                property("overflow-y", "auto")
-                property("scroll-snap-type", "y mandatory")
-                border(1.px, LineStyle.Solid, Color("#d8ded7"))
-                borderRadius(8.px)
-                backgroundColor(Color("#f8faf9"))
-            }
-        }) {
-            WheelItem("Any", selected == null) { onSelect(null) }
+private fun MultiRankButtons(label: String, selected: List<Int>, max: Int, onChange: (List<Int>) -> Unit) {
+    Column(Modifier.gap(6.px)) {
+        H3(attrs = { style { margin(0.px) } }) { Text(label) }
+        OptionGrid {
             (14 downTo 2).forEach { rank ->
-                WheelItem(rankName(rank), selected == rank) { onSelect(rank) }
+                val active = rank in selected
+                ToggleButton(rankName(rank), active) {
+                    val next = if (active) {
+                        selected.filterNot { it == rank }
+                    } else {
+                        (selected + rank).take(max)
+                    }
+                    onChange(next)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun WheelItem(text: String, active: Boolean, onClick: () -> Unit) {
-    Button(attrs = {
-        onClick { onClick() }
-        style {
-            width(100.percent)
-            minHeight(34.px)
-            border(0.px)
-            borderRadius(0.px)
-            backgroundColor(if (active) Color("#147d64") else Color("transparent"))
-            color(if (active) Color("#ffffff") else Color("#65716b"))
-            fontWeight(if (active) "900" else "650")
-            property("scroll-snap-align", "center")
-            property("cursor", "pointer")
+private fun RankButtonSection(label: String, selected: Int?, onSelect: (Int?) -> Unit) {
+    Column(Modifier.gap(6.px)) {
+        H3(attrs = { style { margin(0.px); fontSize(16.px) } }) { Text(label) }
+        OptionGrid {
+            (14 downTo 2).forEach { rank ->
+                ToggleButton(rankName(rank), selected == rank) {
+                    onSelect(rank.takeUnless { selected == rank })
+                }
+            }
         }
-    }) { Text(text) }
+    }
 }
 
 private fun handText(category: Category, ranks: List<Int>): String =
@@ -781,103 +769,6 @@ private fun handText(category: Category, ranks: List<Int>): String =
         Category.RoyalFlush -> "royal flush"
     }
 
-private fun visualCards(parsed: com.pofc.model.ParsedHand, count: Int, playerIndex: Int, used: MutableSet<String>): List<String> {
-    if (parsed.category == Category.Unknown) return emptyList()
-    if (parsed.autoCards.isNotEmpty()) {
-        parsed.autoCards.forEach { used += it }
-        return parsed.autoCards.take(count)
-    }
-    val preferredSuit = listOf('H', 'S', 'D').getOrElse(playerIndex) { 'C' }
-    val ranks = ranksForDisplay(parsed.category, parsed.ranks, parsed.specifiedRankCount, count)
-    val cards = mutableListOf<String>()
-
-    when (parsed.category) {
-        Category.Flush, Category.StraightFlush, Category.RoyalFlush -> {
-            val suit = firstAvailableSuit(preferredSuit, ranks, used)
-            ranks.forEach { rank -> cards += reserveCard(rank, listOf(suit, preferredSuit, 'H', 'S', 'D', 'C'), used) }
-        }
-        Category.Pair -> {
-            val rank = ranks.firstOrNull() ?: return emptyList()
-            cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
-            cards += reserveCard(rank, listOf('S', 'D', 'C', 'H'), used)
-            ranks.getOrNull(1)?.let { kicker -> cards += reserveCard(kicker, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used) }
-        }
-        Category.TwoPair -> {
-            val pairRanks = ranks.take(2)
-            pairRanks.forEach { rank ->
-                cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
-                cards += reserveCard(rank, listOf('S', 'D', 'C', 'H'), used)
-            }
-        }
-        Category.Trips -> {
-            val rank = ranks.firstOrNull() ?: return emptyList()
-            cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
-            cards += reserveCard(rank, listOf('S', 'D', 'C', 'H'), used)
-            cards += reserveCard(rank, listOf('D', 'C', 'H', 'S'), used)
-        }
-        Category.FullHouse -> {
-            val trip = ranks.getOrNull(0) ?: return emptyList()
-            cards += reserveCard(trip, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
-            cards += reserveCard(trip, listOf('S', 'D', 'C', 'H'), used)
-            cards += reserveCard(trip, listOf('D', 'C', 'H', 'S'), used)
-            ranks.getOrNull(1)?.let { pair ->
-                cards += reserveCard(pair, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
-                cards += reserveCard(pair, listOf('S', 'D', 'C', 'H'), used)
-            }
-        }
-        Category.Quads -> {
-            val rank = ranks.firstOrNull() ?: return emptyList()
-            listOf(preferredSuit, 'H', 'S', 'D', 'C').distinct().take(4).forEach { suit ->
-                cards += reserveCard(rank, listOf(suit, 'H', 'S', 'D', 'C'), used)
-            }
-        }
-        Category.Straight -> ranks.forEachIndexed { index, rank ->
-            val suit = listOf('H', 'S', 'D', 'C', 'H').getOrElse(index) { preferredSuit }
-            cards += reserveCard(rank, listOf(suit, preferredSuit, 'H', 'S', 'D', 'C'), used)
-        }
-        Category.High, Category.Unknown -> {
-            ranks.forEach { rank -> cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used) }
-        }
-    }
-
-    return cards.take(count)
-}
-
-private fun ranksForDisplay(category: Category, selected: List<Int>, specifiedRankCount: Int, count: Int): List<Int> =
-    when (category) {
-        Category.RoyalFlush -> listOf(14, 13, 12, 11, 10)
-        Category.StraightFlush, Category.Straight -> straightRanks(selected.firstOrNull() ?: 14)
-        Category.Flush, Category.High -> selected.take(if (specifiedRankCount == 0) count else specifiedRankCount)
-        else -> selected
-    }
-
-private fun straightRanks(high: Int): List<Int> =
-    if (high == 5) listOf(5, 4, 3, 2, 14) else (high downTo (high - 4)).map { it.coerceAtLeast(2) }
-
-private fun firstAvailableSuit(preferred: Char, ranks: List<Int>, used: Set<String>): Char =
-    listOf(preferred, 'H', 'S', 'D', 'C').distinct().firstOrNull { suit ->
-        ranks.all { "${rankName(it)}$suit" !in used }
-    } ?: preferred
-
-private fun reserveCard(rank: Int, suits: List<Char>, used: MutableSet<String>): String {
-    val card = suits.distinct().map { "${rankName(rank)}$it" }.firstOrNull { it !in used }
-        ?: (2..14).flatMap { value -> listOf('H', 'S', 'D', 'C').map { "${rankName(value)}$it" } }.first { it !in used }
-    used += card
-    return card
-}
-
-private fun fillKickers(cards: MutableList<String>, count: Int, preferredSuit: Char, used: MutableSet<String>, avoidRanks: Set<Int>) {
-    var rank = 14
-    while (cards.size < count && rank >= 2) {
-        if (rank !in avoidRanks) {
-            cards += reserveCard(rank, listOf(preferredSuit, 'H', 'S', 'D', 'C'), used)
-        }
-        rank -= 1
-    }
-}
-
-private fun fallbackRank(playerIndex: Int): Int = listOf(14, 13, 12).getOrElse(playerIndex) { 11 }
-
 private fun suitSymbol(suit: Char): String = when (suit) {
     'H' -> "♥"
     'D' -> "♦"
@@ -890,16 +781,27 @@ private fun ScoreGrid(session: Session, scores: Map<String, Int>, fantasies: Map
     Div(attrs = {
         style {
             display(DisplayStyle.Grid)
-            property("grid-template-columns", "repeat(auto-fit, minmax(145px, 1fr))")
+            property("grid-template-columns", "minmax(0, 1fr)")
             gap(10.px)
+            width(100.percent)
         }
     }) {
         session.players.forEach { player ->
-            Div(attrs = { cardStyle() }) {
-                H3 { Text(player.name) }
+            Div(attrs = {
+                cardStyle()
+                style {
+                    display(DisplayStyle.Flex)
+                    property("align-items", "center")
+                    property("justify-content", "space-between")
+                    gap(12.px)
+                }
+            }) {
+                H3(attrs = { style { margin(0.px) } }) { Text(player.name) }
                 Div(attrs = { style { fontSize(32.px); fontWeight("900") } }) { Text(scores.getValue(player.id).signed()) }
-                Muted("Latest ${latest?.deltas?.get(player.id)?.signed() ?: "0"}")
-                Muted("Fantasy ${fantasies.getValue(player.id)}")
+                Div(attrs = { style { property("text-align", "right") } }) {
+                    Muted("Latest ${latest?.deltas?.get(player.id)?.signed() ?: "0"}")
+                    Muted("Fantasy ${fantasies.getValue(player.id)}")
+                }
             }
         }
     }
@@ -916,10 +818,43 @@ private fun DeltaRow(session: Session, deltas: Map<String, Int>) {
 
 @Composable
 private fun BottomNav(canShowScores: Boolean, onSessions: () -> Unit, onScores: () -> Unit, onRoyalties: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(10.px).gap(8.px)) {
-        AppButton("Sessions", onSessions)
-        AppButton("Scores", if (canShowScores) onScores else onSessions)
-        AppButton("Royalties", onRoyalties)
+    Div(attrs = {
+        style {
+            width(100.percent)
+            property("border-top", "1px solid ${borderColor()}")
+            backgroundColor(Color(surfaceColor()))
+        }
+    }) {
+        Div(attrs = {
+            style {
+                width(100.percent)
+                maxWidth(1040.px)
+                property("margin", "0 auto")
+                padding(10.px)
+                property("box-sizing", "border-box")
+            }
+        }) {
+            Row(Modifier.fillMaxWidth().gap(8.px)) {
+                AppButton("Sessions", onSessions)
+                AppButton("Scores", if (canShowScores) onScores else onSessions)
+                AppButton("Royalties", onRoyalties)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ButtonRowEnd(content: @Composable () -> Unit) {
+    Div(attrs = {
+        style {
+            width(100.percent)
+            display(DisplayStyle.Flex)
+            property("justify-content", "flex-end")
+            property("flex-wrap", "wrap")
+            gap(8.px)
+        }
+    }) {
+        content()
     }
 }
 
@@ -932,19 +867,19 @@ private fun Panel(content: @Composable () -> Unit) {
 
 @Composable
 private fun Muted(text: String) {
-    Div(attrs = { style { color(Color("#65716b")); fontSize(14.px) } }) { Text(text) }
+    Div(attrs = { style { color(Color(mutedTextColor())); fontSize(14.px) } }) { Text(text) }
 }
 
 @Composable
 private fun WarningBox(text: String) {
-    Div(attrs = { style { padding(12.px); border(1.px, LineStyle.Solid, Color("#d48b6f")); borderRadius(8.px); backgroundColor(Color("#fff7f0")) } }) {
+    Div(attrs = { style { padding(12.px); border(1.px, LineStyle.Solid, Color(dangerBorderColor())); borderRadius(8.px); backgroundColor(Color(surfaceColor())); color(Color(dangerColor())) } }) {
         Text(text)
     }
 }
 
 @Composable
 private fun GoodBox(text: String) {
-    Div(attrs = { style { padding(12.px); border(1.px, LineStyle.Solid, Color("#8ec7a2")); borderRadius(8.px); backgroundColor(Color("#effaf3")) } }) {
+    Div(attrs = { style { padding(12.px); border(1.px, LineStyle.Solid, Color(borderColor())); borderRadius(8.px); backgroundColor(Color(mutedSurfaceColor())); color(Color(textColor())) } }) {
         Text(text)
     }
 }
@@ -955,7 +890,8 @@ private fun Chip(text: String) {
         style {
             padding(6.px, 9.px)
             borderRadius(6.px)
-            backgroundColor(Color("#edf2ef"))
+            backgroundColor(Color(mutedSurfaceColor()))
+            color(Color(textColor()))
             fontWeight("800")
         }
     }) { Text(text) }
@@ -965,7 +901,7 @@ private fun Chip(text: String) {
 private fun AppButton(text: String, onClick: () -> Unit) {
     Button(attrs = {
         onClick { onClick() }
-        buttonStyle("#ffffff", "#1f2522", "#d8ded7")
+        buttonStyle(surfaceColor(), textColor(), borderColor())
     }) { Text(text) }
 }
 
@@ -973,7 +909,7 @@ private fun AppButton(text: String, onClick: () -> Unit) {
 private fun PrimaryButton(text: String, onClick: () -> Unit) {
     Button(attrs = {
         onClick { onClick() }
-        buttonStyle("#147d64", "#ffffff", "#147d64")
+        buttonStyle(textColor(), surfaceColor(), textColor())
     }) { Text(text) }
 }
 
@@ -981,7 +917,7 @@ private fun PrimaryButton(text: String, onClick: () -> Unit) {
 private fun DangerButton(text: String, onClick: () -> Unit) {
     Button(attrs = {
         onClick { onClick() }
-        buttonStyle("#ffffff", "#a43131", "#e3b6b6")
+        buttonStyle(surfaceColor(), dangerColor(), dangerBorderColor())
     }) { Text(text) }
 }
 
@@ -989,7 +925,19 @@ private fun DangerButton(text: String, onClick: () -> Unit) {
 private fun ToggleButton(text: String, active: Boolean, onClick: () -> Unit) {
     Button(attrs = {
         onClick { onClick() }
-        buttonStyle(if (active) "#147d64" else "#ffffff", if (active) "#ffffff" else "#1f2522", "#147d64")
+        buttonStyle(if (active) textColor() else surfaceColor(), if (active) surfaceColor() else textColor(), textColor())
+    }) { Text(text) }
+}
+
+@Composable
+private fun DisabledButton(text: String) {
+    Button(attrs = {
+        disabled()
+        buttonStyle(mutedSurfaceColor(), mutedTextColor(), borderColor())
+        style {
+            property("cursor", "not-allowed")
+            property("opacity", "0.75")
+        }
     }) { Text(text) }
 }
 
@@ -1027,19 +975,38 @@ private fun Store.replace(session: Session): Store =
 private fun id(prefix: String): String = "$prefix-${Date.now().toLong()}-${Random.nextInt(1000, 9999)}"
 
 private fun appUrl(page: String): String {
-    val base = if (window.location.hostname.endsWith("github.io")) "/POFC-Writer/" else "/"
+    val base = if (window.location.hostname.endsWith("github.io") || window.location.pathname.startsWith("/POFC-Writer")) "/POFC-Writer/" else "/"
     return base + page
 }
+
+private fun pageColor(): String = "Canvas"
+
+private fun surfaceColor(): String = "Canvas"
+
+private fun mutedSurfaceColor(): String = "ButtonFace"
+
+private fun textColor(): String = "CanvasText"
+
+private fun mutedTextColor(): String = "GrayText"
+
+private fun borderColor(): String = "GrayText"
+
+private fun shadowColor(): String = "rgba(0, 0, 0, 0.12)"
+
+private fun dangerColor(): String = "#b3261e"
+
+private fun dangerBorderColor(): String = "#d7a09a"
 
 private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.cardStyle() {
     style {
         width(100.percent)
         padding(14.px)
         property("padding", "clamp(9px, 2.6vw, 14px)")
-        border(1.px, LineStyle.Solid, Color("#d8ded7"))
+        border(1.px, LineStyle.Solid, Color(borderColor()))
         borderRadius(8.px)
-        backgroundColor(Color("#ffffff"))
-        property("box-shadow", "0 10px 30px rgba(28, 42, 36, 0.12)")
+        backgroundColor(Color(surfaceColor()))
+        color(Color(textColor()))
+        property("box-shadow", "0 10px 30px ${shadowColor()}")
         property("box-sizing", "border-box")
     }
 }
@@ -1062,9 +1029,26 @@ private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.inputStyle() {
         width(100.percent)
         minHeight(44.px)
         padding(10.px, 12.px)
-        border(1.px, LineStyle.Solid, Color("#d8ded7"))
+        border(1.px, LineStyle.Solid, Color(borderColor()))
         borderRadius(8.px)
+        backgroundColor(Color(surfaceColor()))
+        color(Color(textColor()))
         fontSize(16.px)
         property("box-sizing", "border-box")
+    }
+}
+
+private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.iconButtonStyle() {
+    style {
+        width(44.px)
+        minHeight(44.px)
+        padding(0.px)
+        border(1.px, LineStyle.Solid, Color(borderColor()))
+        borderRadius(8.px)
+        backgroundColor(Color(surfaceColor()))
+        color(Color(textColor()))
+        display(DisplayStyle.Grid)
+        property("place-items", "center")
+        property("cursor", "pointer")
     }
 }

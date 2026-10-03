@@ -34,7 +34,7 @@ fun RoyaltiesPage() {
                 H1 { Text("Royalties") }
                 Text("Common Pineapple OFC bonuses used by the scorekeeper.")
                 Button(attrs = {
-                    onClick { window.location.href = appUrl("index.html") }
+                    onClick { window.location.href = appUrl("") }
                     buttonStyle()
                 }) { Text("Back to scorekeeper") }
             }
@@ -86,13 +86,13 @@ private fun PlayingCard(code: String) {
         style {
             minHeight(58.px)
             padding(6.px)
-            border(1.px, LineStyle.Solid, Color("#cfd8d2"))
+            border(1.px, LineStyle.Solid, Color(borderColor()))
             borderRadius(6.px)
-            backgroundColor(Color("#ffffff"))
-            color(if (red) Color("#b3263b") else Color("#1f2522"))
+            backgroundColor(Color(surfaceColor()))
+            color(if (red) Color(dangerColor()) else Color(textColor()))
             display(DisplayStyle.Grid)
             property("place-items", "center")
-            property("box-shadow", "0 3px 8px rgba(31, 37, 34, 0.10)")
+            property("box-shadow", "0 3px 8px rgba(0, 0, 0, 0.10)")
         }
     }) {
         Div(attrs = { style { property("text-align", "center"); lineHeight("1.05") } }) {
@@ -106,7 +106,7 @@ private fun PlayingCard(code: String) {
 private fun RoyaltyRow(label: String, middle: String, right: String) {
     Row(Modifier.fillMaxWidth().gap(8.px)) {
         Div(attrs = { style { property("flex", "1") } }) { Text(label) }
-        Div(attrs = { style { property("flex", "1"); color(Color("#65716b")) } }) { Text(middle) }
+        Div(attrs = { style { property("flex", "1"); color(Color(mutedTextColor())) } }) { Text(middle) }
         Div(attrs = { style { property("flex", "1"); fontWeight("800") } }) { Text(right) }
     }
 }
@@ -114,10 +114,11 @@ private fun RoyaltyRow(label: String, middle: String, right: String) {
 private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.cardStyle() {
     style {
         padding(14.px)
-        border(1.px, LineStyle.Solid, Color("#d8ded7"))
+        border(1.px, LineStyle.Solid, Color(borderColor()))
         borderRadius(8.px)
-        backgroundColor(Color("#ffffff"))
-        property("box-shadow", "0 10px 30px rgba(28, 42, 36, 0.12)")
+        backgroundColor(Color(surfaceColor()))
+        color(Color(textColor()))
+        property("box-shadow", "0 10px 30px rgba(0, 0, 0, 0.12)")
     }
 }
 
@@ -125,15 +126,25 @@ private fun org.jetbrains.compose.web.attributes.AttrsScope<*>.buttonStyle() {
     style {
         minHeight(44.px)
         padding(0.px, 12.px)
-        border(1.px, LineStyle.Solid, Color("#147d64"))
+        border(1.px, LineStyle.Solid, Color(textColor()))
         borderRadius(8.px)
-        backgroundColor(Color("#147d64"))
-        color(Color("#ffffff"))
+        backgroundColor(Color(textColor()))
+        color(Color(surfaceColor()))
         fontWeight("800")
     }
 }
 
+private fun surfaceColor(): String = "Canvas"
+
+private fun textColor(): String = "CanvasText"
+
+private fun mutedTextColor(): String = "GrayText"
+
+private fun borderColor(): String = "GrayText"
+
+private fun dangerColor(): String = "#b3261e"
+
 private fun appUrl(page: String): String {
-    val base = if (window.location.hostname.endsWith("github.io")) "/POFC-Writer/" else "/"
+    val base = if (window.location.hostname.endsWith("github.io") || window.location.pathname.startsWith("/POFC-Writer")) "/POFC-Writer/" else "/"
     return base + page
 }

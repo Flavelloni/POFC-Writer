@@ -28,7 +28,7 @@ After enabling GitHub Pages with **Source: GitHub Actions** in the repository se
 
 The royalties page is served at:
 
-`https://flavelloni.github.io/POFC-Writer/royalties.html`
+`https://flavelloni.github.io/POFC-Writer/royalties`
 
 ## Project Layout
 
